@@ -61,6 +61,21 @@
         .result-box {
             position: relative;
         }
+        .history-container {
+            border-top: 1px solid #dee2e6;
+            padding-top: 20px;
+        }
+        .history-item {
+            transition: all 0.2s;
+        }
+        .history-item:hover {
+            background-color: #f8f9fa;
+        }
+        .history-item .summary-preview {
+            max-height: 60px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
     </style>
 </head>
 <body>
@@ -82,6 +97,29 @@
                             <div class="text-center mt-3">
                                 <small class="text-muted">Поддерживаемые форматы: MP4, AVI, MOV, MP3, WAV и другие аудио/видео форматы</small>
                             </div>
+                            
+                            <!-- История транскрипций -->
+                            {% if history %}
+                            <div class="history-container mt-5">
+                                <h4 class="mb-3">История транскрипций</h4>
+                                <div class="list-group">
+                                    {% for item in history %}
+                                    <div class="list-group-item list-group-item-action history-item" data-task-id="{{ item.task_id }}">
+                                        <div class="d-flex w-100 justify-content-between">
+                                            <h5 class="mb-1">Транскрипция #{{ loop.index }}</h5>
+                                            <small>{{ item.date }}</small>
+                                        </div>
+                                        <p class="mb-1 text-muted">{{ item.summary_preview }}</p>
+                                        <div class="mt-2">
+                                            <button class="btn btn-sm btn-outline-primary view-result-btn">Просмотреть</button>
+                                            <a href="/download/{{ item.task_id }}/summary" class="btn btn-sm btn-outline-secondary">Скачать саммари</a>
+                                            <a href="/download/{{ item.task_id }}/transcript" class="btn btn-sm btn-outline-secondary">Скачать транскрипцию</a>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endif %}
                         </div>
 
                         <div id="progress-container" style="display: none;">
@@ -92,14 +130,19 @@
                         </div>
 
                         <div id="result-container" class="result-container">
-                            <ul class="nav nav-tabs" id="resultTabs" role="tablist">
-                                <li class="nav-item" role="presentation">
-                                    <button class="nav-link active" id="summary-tab" data-bs-toggle="tab" data-bs-target="#summary" type="button" role="tab">Саммари</button>
-                                </li>
-                                <li class="nav-item" role="presentation">
-                                    <button class="nav-link" id="transcript-tab" data-bs-toggle="tab" data-bs-target="#transcript" type="button" role="tab">Полная транскрипция</button>
-                                </li>
-                            </ul>
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <ul class="nav nav-tabs flex-grow-1" id="resultTabs" role="tablist">
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link active" id="summary-tab" data-bs-toggle="tab" data-bs-target="#summary" type="button" role="tab">Саммари</button>
+                                    </li>
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link" id="transcript-tab" data-bs-toggle="tab" data-bs-target="#transcript" type="button" role="tab">Полная транскрипция</button>
+                                    </li>
+                                </ul>
+                                <button id="back-to-upload" class="btn btn-outline-secondary btn-sm">
+                                    <i class="bi bi-arrow-left"></i> Вернуться к загрузке
+                                </button>
+                            </div>
                             <div class="tab-content mt-3">
                                 <div class="tab-pane fade show active" id="summary" role="tabpanel">
                                     <div class="result-box">
@@ -144,6 +187,55 @@
             
             let currentTaskId = null;
             let statusCheckInterval = null;
+            
+            // Обработка нажатия на кнопку "Вернуться к загрузке"
+            const backToUploadBtn = document.getElementById('back-to-upload');
+            if (backToUploadBtn) {
+                backToUploadBtn.addEventListener('click', function() {
+                    resultContainer.style.display = 'none';
+                    uploadContainer.style.display = 'block';
+                });
+            }
+            
+            // Обработка нажатия на кнопку "Просмотреть" в истории
+            document.querySelectorAll('.view-result-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    const historyItem = this.closest('.history-item');
+                    const taskId = historyItem.dataset.taskId;
+                    
+                    // Показываем индикатор загрузки
+                    uploadContainer.style.display = 'none';
+                    progressContainer.style.display = 'block';
+                    progressBar.style.width = '50%';
+                    statusMessage.textContent = 'Загрузка результатов...';
+                    
+                    // Запрашиваем результаты по task_id
+                    fetch(`/view/${taskId}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.error) {
+                                throw new Error(data.error);
+                            }
+                            
+                            // Отображаем результаты
+                            summaryText.textContent = data.summary;
+                            transcriptText.textContent = data.transcript;
+                            
+                            // Настраиваем ссылки для скачивания
+                            downloadSummary.href = `/download/${taskId}/summary`;
+                            downloadTranscript.href = `/download/${taskId}/transcript`;
+                            
+                            // Показываем контейнер с результатами
+                            progressContainer.style.display = 'none';
+                            resultContainer.style.display = 'block';
+                        })
+                        .catch(error => {
+                            alert('Ошибка при загрузке результатов: ' + error.message);
+                            uploadContainer.style.display = 'block';
+                            progressContainer.style.display = 'none';
+                        });
+                });
+            });
 
             // Обработка перетаскивания файла
             dropZone.addEventListener('dragover', (e) => {
@@ -244,6 +336,15 @@
                             // Показываем контейнер с результатами
                             progressContainer.style.display = 'none';
                             resultContainer.style.display = 'block';
+                            
+                            // Добавляем кнопку для обновления истории
+                            const refreshBtn = document.createElement('button');
+                            refreshBtn.className = 'btn btn-outline-primary mt-3';
+                            refreshBtn.textContent = 'Обновить историю';
+                            refreshBtn.onclick = function() {
+                                window.location.reload();
+                            };
+                            document.querySelector('#summary').appendChild(refreshBtn);
                         }
                         
                         // Если произошла ошибка

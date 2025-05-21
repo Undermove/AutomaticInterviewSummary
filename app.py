@@ -60,7 +60,48 @@ processing_status = {}
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    # Получаем список всех обработанных файлов
+    history = get_processing_history()
+    return render_template('index.html', history=history)
+
+def get_processing_history():
+    """Получает историю всех обработанных файлов"""
+    history = []
+    
+    # Ищем все файлы summary_*.txt в папке results
+    summary_files = [f for f in os.listdir(app.config['RESULTS_FOLDER']) 
+                    if f.endswith('_summary.txt') and os.path.isfile(os.path.join(app.config['RESULTS_FOLDER'], f))]
+    
+    for summary_file in summary_files:
+        # Извлекаем task_id из имени файла
+        task_id = summary_file.replace('_summary.txt', '')
+        
+        # Проверяем наличие соответствующего файла транскрипции
+        transcript_file = f"{task_id}_transcript.txt"
+        transcript_path = os.path.join(app.config['RESULTS_FOLDER'], transcript_file)
+        
+        if os.path.exists(transcript_path):
+            # Получаем время создания файла
+            timestamp = os.path.getmtime(os.path.join(app.config['RESULTS_FOLDER'], summary_file))
+            date_created = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(timestamp))
+            
+            # Читаем первые 200 символов саммари для предпросмотра
+            with open(os.path.join(app.config['RESULTS_FOLDER'], summary_file), 'r', encoding='utf-8') as f:
+                summary_preview = f.read(200)
+                if len(summary_preview) == 200:
+                    summary_preview += '...'
+            
+            # Добавляем информацию в историю
+            history.append({
+                'task_id': task_id,
+                'date': date_created,
+                'summary_preview': summary_preview
+            })
+    
+    # Сортируем по времени создания (новые сверху)
+    history.sort(key=lambda x: x['date'], reverse=True)
+    
+    return history
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
@@ -159,6 +200,29 @@ def download_file(task_id, file_type):
     
     filename = f"{task_id}_{file_type}.txt"
     return send_from_directory(app.config['RESULTS_FOLDER'], filename, as_attachment=True)
+
+@app.route('/view/<task_id>', methods=['GET'])
+def view_result(task_id):
+    """Просмотр результатов обработки по task_id"""
+    # Проверяем наличие файлов
+    summary_path = os.path.join(app.config['RESULTS_FOLDER'], f"{task_id}_summary.txt")
+    transcript_path = os.path.join(app.config['RESULTS_FOLDER'], f"{task_id}_transcript.txt")
+    
+    if not os.path.exists(summary_path) or not os.path.exists(transcript_path):
+        return jsonify({'error': 'Результаты не найдены'}), 404
+    
+    # Читаем содержимое файлов
+    with open(summary_path, 'r', encoding='utf-8') as f:
+        summary = f.read()
+    
+    with open(transcript_path, 'r', encoding='utf-8') as f:
+        transcript = f.read()
+    
+    # Возвращаем результаты
+    return jsonify({
+        'summary': summary,
+        'transcript': transcript
+    })
 
 # Очистка старых результатов (запускается в отдельном потоке)
 def cleanup_old_files():

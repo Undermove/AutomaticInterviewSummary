@@ -32,22 +32,22 @@ docker-compose up -d
 if [ $? -eq 0 ]; then
     echo "✅ Контейнеры успешно запущены!"
     echo "⏳ При первом запуске может потребоваться некоторое время для загрузки модели llama3.2 (около 4 ГБ)"
-    echo "🌐 Откройте веб-браузер и перейдите по адресу: http://localhost:5000"
+    echo "🌐 Откройте веб-браузер и перейдите по адресу: http://localhost:5100"
     
     # Открываем браузер (работает на macOS, Linux и Windows с WSL)
     case "$(uname -s)" in
         Darwin)
-            open "http://localhost:5000"
+            open "http://localhost:5100"
             ;;
         Linux)
             if command -v xdg-open &> /dev/null; then
-                xdg-open "http://localhost:5000"
+                xdg-open "http://localhost:5100"
             elif command -v gnome-open &> /dev/null; then
-                gnome-open "http://localhost:5000"
+                gnome-open "http://localhost:5100"
             fi
             ;;
         CYGWIN*|MINGW*|MSYS*)
-            start "http://localhost:5000"
+            start "http://localhost:5100"
             ;;
     esac
 else
