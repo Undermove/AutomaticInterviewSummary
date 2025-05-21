@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  interview-summary:
+    build: .
+    container_name: interview-summary
+    ports:
+      - "5100:5000"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./results:/app/results
+    restart: unless-stopped
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OLLAMA_HOST=http://ollama:11434
+    depends_on:
+      - ollama
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama-service
+    volumes:
+      - ollama-data:/root/.ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    command: serve
+
+volumes:
+  ollama-data:
