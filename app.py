@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 import os
 import uuid
+import requests
+import time
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from werkzeug.utils import secure_filename
 import threading
-import time
 from summarize_interview import transcribe, summarize_with_ollama
 
 app = Flask(__name__)
@@ -15,6 +16,44 @@ app.config['RESULTS_FOLDER'] = 'results'
 # Создаем необходимые директории
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['RESULTS_FOLDER'], exist_ok=True)
+
+# Инициализация Ollama - загрузка модели при запуске
+def init_ollama():
+    ollama_host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+    print(f"🤖 Инициализация Ollama на {ollama_host}...")
+    
+    # Ждем, пока Ollama будет доступна
+    max_retries = 30
+    for i in range(max_retries):
+        try:
+            response = requests.get(f"{ollama_host}/api/tags")
+            if response.status_code == 200:
+                print("✅ Ollama доступна")
+                break
+        except Exception:
+            pass
+        
+        print(f"⏳ Ожидание Ollama... ({i+1}/{max_retries})")
+        time.sleep(5)
+    
+    # Проверяем наличие модели llama3.2
+    try:
+        response = requests.get(f"{ollama_host}/api/tags")
+        models = response.json().get("models", [])
+        model_exists = any(model.get("name") == "llama3.2" for model in models)
+        
+        if not model_exists:
+            print("📥 Загрузка модели llama3.2...")
+            response = requests.post(
+                f"{ollama_host}/api/pull",
+                json={"name": "llama3.2"},
+            )
+            print("✅ Модель llama3.2 загружена")
+    except Exception as e:
+        print(f"⚠️ Ошибка при инициализации Ollama: {e}")
+
+# Запускаем инициализацию в отдельном потоке
+threading.Thread(target=init_ollama, daemon=True).start()
 
 # Словарь для хранения статуса обработки
 processing_status = {}

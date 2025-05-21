@@ -24,22 +24,40 @@ def transcribe(input_path: str) -> str:
 
 
 def summarize_with_ollama(text: str) -> str:
+    import os
+    import requests
+    import json
+    
     prompt = f"""
 Ты — помощник, делающий краткое и структурированное саммари техсобесов.
 Сделай короткий обзор по следующему тексту:
 {text}
 """
     try:
-        result = subprocess.run(
-            ["ollama", "run", "llama3.2"],
-            input=prompt,
-            text=True,
-            capture_output=True,
+        # Получаем хост Ollama из переменной окружения или используем значение по умолчанию
+        ollama_host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+        
+        # Формируем URL для API
+        url = f"{ollama_host}/api/generate"
+        
+        # Отправляем запрос к API Ollama
+        response = requests.post(
+            url,
+            json={
+                "model": "llama3.2",
+                "prompt": prompt,
+                "stream": False
+            },
             timeout=180
         )
-        if result.returncode != 0:
-            raise RuntimeError(result.stderr)
-        return result.stdout.strip()
+        
+        # Проверяем статус ответа
+        if response.status_code != 200:
+            raise RuntimeError(f"Ошибка API Ollama: {response.text}")
+        
+        # Получаем результат
+        result = response.json()
+        return result.get("response", "").strip()
     except Exception as e:
         raise RuntimeError(f"Ошибка при вызове Ollama: {e}")
 
